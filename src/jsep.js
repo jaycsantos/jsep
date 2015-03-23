@@ -344,6 +344,10 @@
 							// Check for all of the common escape codes
 							ch = exprI(index++);
 							switch(ch) {
+								case '\'': str += '\''; break;
+								case '"': str += '\"'; break;
+								case '\\': str += '\\'; break;
+								case '\/': str += '\/'; break;
 								case 'n': str += '\n'; break;
 								case 'r': str += '\r'; break;
 								case 't': str += '\t'; break;

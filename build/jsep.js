@@ -1,4 +1,4 @@
-//     JavaScript Expression Parser (JSEP) 0.3.0
+//     JavaScript Expression Parser (JSEP) 0.3.1-beta
 //     JSEP may be freely distributed under the MIT License
 //     http://jsep.from.so/
 
@@ -344,6 +344,10 @@
 							// Check for all of the common escape codes
 							ch = exprI(index++);
 							switch(ch) {
+								case '\'': str += '\''; break;
+								case '"': str += '\"'; break;
+								case '\\': str += '\\'; break;
+								case '\/': str += '\/'; break;
 								case 'n': str += '\n'; break;
 								case 'r': str += '\r'; break;
 								case 't': str += '\t'; break;
@@ -545,7 +549,7 @@
 		};
 
 	// To be filled in by the template
-	jsep.version = '0.3.0';
+	jsep.version = '0.3.1-beta';
 	jsep.toString = function() { return 'JavaScript Expression Parser (JSEP) v' + jsep.version; };
 
 	/**
