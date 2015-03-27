@@ -93,6 +93,8 @@
 			return {
 				type: type,
 				operator: operator,
+				index: left.index,
+				length: right.index + right.length - left.index,
 				left: left,
 				right: right
 			};
@@ -264,6 +266,7 @@
 					} else if (ch === OBRACK_CODE) {
 						return gobbleArray();
 					} else {
+						var start = index;
 						to_check = expr.substr(index, max_unop_len);
 						tc_len = to_check.length;
 						while(tc_len > 0) {
@@ -271,8 +274,10 @@
 								index += tc_len;
 								return {
 									type: UNARY_EXP,
+									index: start,
 									operator: to_check,
 									argument: gobbleToken(),
+									length: index - start,
 									prefix: true
 								};
 							}
@@ -285,7 +290,7 @@
 				// Parse simple numeric literals: `12`, `3.4`, `.5`. Do this by using a string to
 				// keep track of everything in the numeric literal and then calling `parseFloat` on that string
 				gobbleNumericLiteral = function() {
-					var number = '', ch, chCode;
+					var number = '', ch, chCode, start = index;
 					while(isDecimalDigit(exprICode(index))) {
 						number += exprI(index++);
 					}
@@ -325,6 +330,8 @@
 
 					return {
 						type: LITERAL,
+						index: start,
+						length: number.toString().length,
 						value: parseFloat(number),
 						raw: number
 					};
@@ -333,7 +340,7 @@
 				// Parses a string literal, staring with single or double quotes with basic support for escape codes
 				// e.g. `"hello world"`, `'this is\nJSEP'`
 				gobbleStringLiteral = function() {
-					var str = '', quote = exprI(index++), closed = false, ch;
+					var str = '', start = index, quote = exprI(index++), closed = false, ch;
 
 					while(index < length) {
 						ch = exprI(index++);
@@ -366,6 +373,8 @@
 
 					return {
 						type: LITERAL,
+						index: start,
+						length: str.length + 2,
 						value: str,
 						raw: quote + str + quote
 					};
@@ -397,14 +406,22 @@
 					if(literals.hasOwnProperty(identifier)) {
 						return {
 							type: LITERAL,
+							index: start,
+							length: literals[identifier].length,
 							value: literals[identifier],
 							raw: identifier
 						};
 					} else if(identifier === this_str) {
-						return { type: THIS_EXP };
+						return {
+							type: THIS_EXP,
+							index: start,
+							length: index - start
+						};
 					} else {
 						return {
 							type: IDENTIFIER,
+							index: start,
+							length: identifier.length,
 							name: identifier
 						};
 					}
@@ -441,7 +458,7 @@
 				// It also gobbles function calls:
 				// e.g. `Math.acos(obj.angle)`
 				gobbleVariable = function() {
-					var ch_i, node;
+					var ch_i, node, start;
 					ch_i = exprICode(index);
 						
 					if(ch_i === OPAREN_CODE) {
@@ -452,21 +469,25 @@
 					gobbleSpaces();
 					ch_i = exprICode(index);
 					while(ch_i === PERIOD_CODE || ch_i === OBRACK_CODE || ch_i === OPAREN_CODE) {
-						index++;
+						start = index++;
 						if(ch_i === PERIOD_CODE) {
 							gobbleSpaces();
 							node = {
 								type: MEMBER_EXP,
 								computed: false,
+								index: start,
 								object: node,
-								property: gobbleIdentifier()
+								property: gobbleIdentifier(),
+								length: index - start
 							};
 						} else if(ch_i === OBRACK_CODE) {
 							node = {
 								type: MEMBER_EXP,
 								computed: true,
+								index: start,
 								object: node,
-								property: gobbleExpression()
+								property: gobbleExpression(),
+								length: index - start
 							};
 							gobbleSpaces();
 							ch_i = exprICode(index);
@@ -478,7 +499,9 @@
 							// A function call is being made; gobble all the arguments
 							node = {
 								type: CALL_EXP,
+								index: start,
 								'arguments': gobbleArguments(CPAREN_CODE),
+								length: index - start,
 								callee: node
 							};
 						}
@@ -509,25 +532,32 @@
 				// This function assumes that it needs to gobble the opening bracket
 				// and then tries to gobble the expressions as arguments.
 				gobbleArray = function() {
-					index++;
+					var start = index++;
 					return {
 						type: ARRAY_EXP,
-						elements: gobbleArguments(CBRACK_CODE)
+						index: start,
+						elements: gobbleArguments(CBRACK_CODE),
+						length: index - start
 					};
 				},
+
+				// the separator for compound expressions
+				seps = [],
 
 				nodes = [], ch_i, node;
 				
 			while(index < length) {
 				ch_i = exprICode(index);
 
-				// Expressions can be separated by semicolons, commas, or just inferred without any
-				// separators
+				// Expressions can be separated by semicolons or commas only
 				if(ch_i === SEMCOL_CODE || ch_i === COMMA_CODE) {
+					seps.push(ch_i);
 					index++; // ignore separators
 				} else {
 					// Try to gobble each expression individually
 					if((node = gobbleExpression())) {
+						if(seps.length != nodes.length)
+							throwError('Expecting ";" or ","', index);
 						nodes.push(node);
 					// If we weren't able to find a binary expression and are out of room, then
 					// the expression passed in probably has too much
@@ -543,6 +573,7 @@
 			} else {
 				return {
 					type: COMPOUND,
+					separators: seps,
 					body: nodes
 				};
 			}
